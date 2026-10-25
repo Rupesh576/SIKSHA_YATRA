@@ -1,4 +1,4 @@
-# Teacher Learning Portal MVP
+# SIKSHA_YATRA — Teacher Learning Portal
 
 Responsive Next.js prototype for Stemtech Innovation Foundation. It includes a branded landing page, Supabase email OTP and Google OAuth entry points, a protected dashboard, an authenticated content endpoint, an admin gate, and the PostgreSQL/outbox migration.
 
