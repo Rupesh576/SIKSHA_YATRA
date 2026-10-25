@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+* { box-sizing: border-box; }
+body { margin: 0; background: #f6f4ee; color: #18231d; }
+button, input { font: inherit; }
+.grid-paper { background-image: linear-gradient(rgba(31,107,79,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(31,107,79,.06) 1px, transparent 1px); background-size: 32px 32px; }
