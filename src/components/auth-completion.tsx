@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, describeAuthError } from "@/lib/supabase/client";
 
 const GOOGLE_PROFILE_DRAFT_KEY = "teacher-profile-draft";
 
@@ -51,52 +51,56 @@ export function AuthCompletion() {
         return;
       }
 
-      const supabase = createClient();
-      const { data, error: userError } = await supabase.auth.getUser();
-      if (userError || !data.user) {
-        setMessage(userError?.message ?? "Your account could not be loaded. Please try signing in again.");
-        return;
-      }
-      if (!data.user.email) {
-        setMessage("Your Google account did not provide an email address. Please use email sign-in instead.");
-        return;
-      }
+      try {
+        const supabase = createClient();
+        const { data, error: userError } = await supabase.auth.getUser();
+        if (userError || !data.user) {
+          setMessage(describeAuthError(userError, "Your account could not be loaded. Please try signing in again."));
+          return;
+        }
+        if (!data.user.email) {
+          setMessage("Your Google account did not provide an email address. Please use email sign-in instead.");
+          return;
+        }
 
-      const fullName = `${profile.firstName} ${profile.surname}`;
-      const { error: metadataError } = await supabase.auth.updateUser({
-        data: {
+        const fullName = `${profile.firstName} ${profile.surname}`;
+        const { error: metadataError } = await supabase.auth.updateUser({
+          data: {
+            first_name: profile.firstName,
+            surname: profile.surname,
+            full_name: fullName,
+            phone_number: profile.phoneNumber,
+            classes: profile.classes,
+            subjects: profile.subjects,
+          },
+        });
+        if (metadataError) {
+          setMessage(`Your account was verified, but your teacher details could not be saved: ${describeAuthError(metadataError, "Please try again.")}`);
+          return;
+        }
+
+        const { error: profileError } = await supabase.from("profiles").upsert({
+          id: data.user.id,
+          name: fullName,
           first_name: profile.firstName,
           surname: profile.surname,
-          full_name: fullName,
           phone_number: profile.phoneNumber,
           classes: profile.classes,
           subjects: profile.subjects,
-        },
-      });
-      if (metadataError) {
-        setMessage(`Your account was verified, but your teacher details could not be saved: ${metadataError.message}`);
-        return;
-      }
+          email: data.user.email.toLowerCase(),
+          updated_at: new Date().toISOString(),
+          last_login_at: new Date().toISOString(),
+        });
+        if (profileError) {
+          setMessage(`Your account was verified, but your teacher profile could not be saved: ${describeAuthError(profileError, "Please try again.")}`);
+          return;
+        }
 
-      const { error: profileError } = await supabase.from("profiles").upsert({
-        id: data.user.id,
-        name: fullName,
-        first_name: profile.firstName,
-        surname: profile.surname,
-        phone_number: profile.phoneNumber,
-        classes: profile.classes,
-        subjects: profile.subjects,
-        email: data.user.email.toLowerCase(),
-        updated_at: new Date().toISOString(),
-        last_login_at: new Date().toISOString(),
-      });
-      if (profileError) {
-        setMessage(`Your account was verified, but your teacher profile could not be saved: ${profileError.message}`);
-        return;
+        sessionStorage.removeItem(GOOGLE_PROFILE_DRAFT_KEY);
+        window.location.replace("/dashboard");
+      } catch {
+        setMessage(describeAuthError({ message: "Failed to fetch" }, "Your account could not be loaded. Please try signing in again."));
       }
-
-      sessionStorage.removeItem(GOOGLE_PROFILE_DRAFT_KEY);
-      window.location.replace("/dashboard");
     }
 
     void completeSignIn();
