@@ -1,33 +1,32 @@
 # SIKSHA_YATRA — Teacher Learning Portal
 
-Responsive Next.js prototype for Stemtech Innovation Foundation. It includes a branded landing page, Supabase email OTP and Google OAuth entry points, a protected dashboard, an authenticated content endpoint, an admin gate, and the PostgreSQL/outbox migration.
+Responsive Next.js prototype for Stemtech Innovation Foundation. It includes a branded landing page, email/password sign up and sign in, a protected dashboard, an authenticated content endpoint, an admin gate, and a Postgres schema for teacher accounts.
+
+Authentication is self-hosted: passwords are hashed with bcrypt and sessions are signed JWTs in an httpOnly cookie, stored in a PostgreSQL database (tested against a Render Postgres instance, but any Postgres works).
 
 ## Run locally
 
 1. Install Node.js 20+ and run `npm install`.
-2. Copy `.env.example` to `.env.local` and fill in the Supabase URL/key and Drive folder URL.
-3. In Supabase SQL Editor, run `supabase/migrations/0001_teacher_portal.sql`, `supabase/migrations/0002_teacher_profile_details.sql`, and `supabase/migrations/0003_admin_user_management.sql` in order. If earlier migrations have already been applied, run only the ones not yet applied.
-4. Enable Email OTP and Google provider in Supabase Auth. Add `http://localhost:3000/auth/callback` to redirect URLs.
-5. Run `npm run dev`.
-
-Without Supabase values, the landing page still renders and shows a clear setup message when a login method is selected.
+2. Copy `.env.example` to `.env.local` and fill in `DATABASE_URL`, `JWT_SECRET`, and `GOOGLE_DRIVE_CONTENT_URL`.
+3. Apply `render-db/schema.sql` to your Postgres database: `psql "$DATABASE_URL" -f render-db/schema.sql`. It creates a `siksha_yatra` schema with a single `users` table, so it's safe to share a database with other projects.
+4. Run `npm run dev`.
 
 ## Admin user management
 
-Set `ADMIN_EMAILS` to a comma-separated list of trusted admin email addresses and configure the server-only `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` and the deployment environment. Never expose the service role key in a `NEXT_PUBLIC_` variable. An allowlisted admin can open `/admin` to review teacher profile details, block/unblock sign-in, or permanently remove an account.
+Set `ADMIN_EMAILS` to a comma-separated list of trusted admin email addresses. An allowlisted admin can open `/admin` to review teacher profile details, block/unblock sign-in, or permanently remove an account. There is no separate admin role in the database — any account whose email is in `ADMIN_EMAILS` gets admin access.
 
 ## Google Sheets setup
 
-Create a Sheet named `Teacher Portal Users` with a `Users` tab, enable Sheets API, create a service account, and share the sheet with that service account. Add its server-only credentials to `.env.local`. `workers/sheet-sync.ts` is a safe starting point for a managed worker; it should be connected to the `sheet_sync_jobs` outbox with claiming, retries, idempotent `user_id` lookups, and reconciliation before production.
+Create a Sheet named `Teacher Portal Users` with a `Users` tab, enable Sheets API, create a service account, and share the sheet with that service account. Add its server-only credentials to `.env.local`. `workers/sheet-sync.ts` is a safe starting point for a managed worker; it is not currently wired into the app.
 
 ## Deployment
 
-Deploy to Vercel, add the same environment variables, and register the production callback URL in both Supabase and Google Cloud. `GOOGLE_DRIVE_CONTENT_URL` is only gated by the app endpoint; Drive sharing permissions still control the underlying content.
+Deploy to Vercel and/or Render, add the same environment variables there, and point `DATABASE_URL` at your production Postgres instance. If the web service and database are both on Render, use the internal connection string for lower latency; otherwise use the external one.
 
 ## Production-readiness backlog
 
-- Configure durable queue/worker, idempotent Sheet upserts, exponential backoff and reconciliation.
-- Add rate limiting, abuse monitoring, structured error reporting and admin retry actions.
-- Test OAuth identity linking, email-provider quotas, backups, RLS policies and representative peak concurrency.
+- Add rate limiting and abuse monitoring on the signup/signin endpoints.
+- Add structured error reporting and admin retry actions.
+- Add password reset / forgot-password flow.
 - Replace the temporary admin email allowlist with a database-backed role claim and audit logging.
 - Run load/security tests before making any capacity or production-readiness claim.

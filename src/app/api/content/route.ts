@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+
+export const runtime = "nodejs";
+
 export async function GET() {
-  const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (user.isBlocked) return NextResponse.json({ error: "This account is blocked." }, { status: 403 });
   return NextResponse.json({ title: "Teacher learning materials", url: process.env.GOOGLE_DRIVE_CONTENT_URL ?? "" });
 }

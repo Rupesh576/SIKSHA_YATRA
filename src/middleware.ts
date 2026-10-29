@@ -1,39 +1,18 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-        },
-      },
-    },
-  );
-
-  const { data: { user }, error } = await supabase.auth.getUser();
   const isApiRequest = request.nextUrl.pathname.startsWith("/api/");
-  const isBanned = Boolean(user?.banned_until && new Date(user.banned_until).getTime() > Date.now());
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = token ? await verifySession(token) : null;
 
-  if (error || !user || isBanned) {
-    const status = isBanned ? 403 : 401;
-    const deniedResponse = isApiRequest
-      ? NextResponse.json({ error: isBanned ? "This account is blocked." : "Unauthorized" }, { status })
+  if (!session) {
+    return isApiRequest
+      ? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
       : NextResponse.redirect(new URL("/", request.url));
-    response.cookies.getAll().forEach(({ name, value, ...options }) => {
-      deniedResponse.cookies.set(name, value, options);
-    });
-    return deniedResponse;
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

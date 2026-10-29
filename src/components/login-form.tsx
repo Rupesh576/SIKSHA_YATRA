@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { ArrowRight, Lock, Mail, ShieldCheck } from "lucide-react";
-import { createClient, describeAuthError, isSupabaseConfigured } from "@/lib/supabase/client";
 
 const CLASS_OPTIONS = [
   "Nursery",
@@ -25,22 +24,21 @@ const SUBJECT_OPTIONS = [
   "Other",
 ];
 
-const GOOGLE_PROFILE_DRAFT_KEY = "teacher-profile-draft";
-
-type TeacherProfile = {
-  firstName: string;
-  surname: string;
-  phoneNumber: string;
-  classes: string[];
-  subjects: string[];
-};
-
 type Mode = "signup" | "signin";
 
 function toggleSelection(values: string[], value: string) {
   return values.includes(value)
     ? values.filter((item) => item !== value)
     : [...values, value];
+}
+
+async function describeFetchError(response: Response, fallback: string) {
+  try {
+    const payload = await response.json();
+    return typeof payload.error === "string" ? payload.error : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function LoginForm({ initialError }: { initialError?: string }) {
@@ -55,37 +53,29 @@ export function LoginForm({ initialError }: { initialError?: string }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(initialError ?? "");
-  const configured = isSupabaseConfigured();
 
-  function getProfile(): TeacherProfile | null {
+  function validateProfile() {
     const normalizedPhoneNumber = phoneNumber.trim();
     const digits = normalizedPhoneNumber.replace(/\D/g, "");
     if (!firstName.trim() || !surname.trim()) {
       setMessage("Please enter your first and last name.");
-      return null;
+      return false;
     }
     if (!/^\+?[0-9\s().-]+$/.test(normalizedPhoneNumber) || digits.length < 7 || digits.length > 15) {
       setMessage("Please enter a valid phone number.");
-      return null;
+      return false;
     }
     if (classes.length === 0 || subjects.length === 0) {
       setMessage("Please select at least one class and one subject.");
-      return null;
+      return false;
     }
-    return {
-      firstName: firstName.trim(),
-      surname: surname.trim(),
-      phoneNumber: normalizedPhoneNumber,
-      classes,
-      subjects,
-    };
+    return true;
   }
 
   async function signUp(event: React.FormEvent) {
     event.preventDefault();
     setMessage("");
-    const profile = getProfile();
-    if (!profile) return;
+    if (!validateProfile()) return;
     if (!email || !email.includes("@")) {
       setMessage("Please enter a valid email address.");
       return;
@@ -98,45 +88,33 @@ export function LoginForm({ initialError }: { initialError?: string }) {
       setMessage("Passwords do not match.");
       return;
     }
-    if (!configured) {
-      setMessage("Supabase is not configured yet. Add the values from .env.example to begin.");
-      return;
-    }
 
     setBusy(true);
-    const fullName = `${profile.firstName} ${profile.surname}`;
     try {
-      const { data, error } = await createClient().auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          data: {
-            first_name: profile.firstName,
-            surname: profile.surname,
-            full_name: fullName,
-            phone_number: profile.phoneNumber,
-            classes: profile.classes,
-            subjects: profile.subjects,
-          },
-        },
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+          firstName: firstName.trim(),
+          surname: surname.trim(),
+          phoneNumber: phoneNumber.trim(),
+          classes,
+          subjects,
+        }),
       });
-      if (error) {
-        if (error.code === "user_already_exists") {
-          setMessage("An account with this email already exists. Please sign in instead.");
+      if (!response.ok) {
+        const errorMessage = await describeFetchError(response, "Could not create your account.");
+        if (response.status === 409) {
           setMode("signin");
-          return;
         }
-        setMessage(describeAuthError(error, "Could not create your account."));
-        return;
-      }
-      if (!data.session) {
-        setMessage("Your account was created, but could not be signed in automatically. Please sign in below.");
-        setMode("signin");
+        setMessage(errorMessage);
         return;
       }
       window.location.assign("/dashboard");
     } catch {
-      setMessage(describeAuthError({ message: "Failed to fetch" }, "Could not create your account."));
+      setMessage("Could not reach the server. Check your internet connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -153,58 +131,23 @@ export function LoginForm({ initialError }: { initialError?: string }) {
       setMessage("Please enter your password.");
       return;
     }
-    if (!configured) {
-      setMessage("Supabase is not configured yet. Add the values from .env.example to begin.");
-      return;
-    }
 
     setBusy(true);
     try {
-      const { error } = await createClient().auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
+      const response = await fetch("/api/auth/signin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
-      if (error) {
-        setMessage(describeAuthError(error, "Could not sign you in."));
+      if (!response.ok) {
+        setMessage(await describeFetchError(response, "Could not sign you in."));
         return;
       }
       window.location.assign("/dashboard");
     } catch {
-      setMessage(describeAuthError({ message: "Failed to fetch" }, "Could not sign you in."));
+      setMessage("Could not reach the server. Check your internet connection and try again.");
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function googleLogin() {
-    setMessage("");
-    if (!configured) {
-      setMessage("Supabase is not configured yet. Add the values from .env.example to begin.");
-      return;
-    }
-    if (mode === "signup") {
-      const profile = getProfile();
-      if (!profile) return;
-      sessionStorage.setItem(GOOGLE_PROFILE_DRAFT_KEY, JSON.stringify(profile));
-    } else {
-      sessionStorage.removeItem(GOOGLE_PROFILE_DRAFT_KEY);
-    }
-
-    setBusy(true);
-    try {
-      const { error } = await createClient().auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
-      });
-      if (error) {
-        sessionStorage.removeItem(GOOGLE_PROFILE_DRAFT_KEY);
-        setBusy(false);
-        setMessage(describeAuthError(error, "Could not start Google sign-in."));
-      }
-    } catch {
-      sessionStorage.removeItem(GOOGLE_PROFILE_DRAFT_KEY);
-      setBusy(false);
-      setMessage(describeAuthError({ message: "Failed to fetch" }, "Could not start Google sign-in."));
     }
   }
 
@@ -316,19 +259,6 @@ export function LoginForm({ initialError }: { initialError?: string }) {
         </fieldset>
       )}
 
-      <button
-        type="button"
-        onClick={googleLogin}
-        disabled={busy}
-        className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-ink/10 bg-white font-semibold text-ink transition hover:border-leaf hover:bg-mint disabled:cursor-wait disabled:opacity-60"
-      >
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-[#4285F4] text-sm font-bold text-white">G</span>
-        Continue with Google
-      </button>
-      <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-widest text-ink/35">
-        <span className="h-px flex-1 bg-ink/10" /> or <span className="h-px flex-1 bg-ink/10" />
-      </div>
-
       <form onSubmit={mode === "signup" ? signUp : signIn} className="space-y-3">
         <label htmlFor="email" className="text-sm font-semibold text-ink/75">Email address</label>
         <div className="relative">
@@ -400,7 +330,7 @@ export function LoginForm({ initialError }: { initialError?: string }) {
       )}
       <p className="flex items-start gap-2 pt-2 text-xs leading-5 text-ink/50">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-leaf" />
-        Your account is protected with your own password. No email codes needed.
+        Your account is protected with your own password.
       </p>
     </div>
   );
