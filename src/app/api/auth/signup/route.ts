@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && "code" in error && (error as { code?: string }).code === "23505") {
       return NextResponse.json({ error: "An account with this email already exists. Please sign in instead." }, { status: 409 });
     }
+    console.error("signup failed:", error);
     return NextResponse.json({ error: "Could not create your account." }, { status: 500 });
   }
 
