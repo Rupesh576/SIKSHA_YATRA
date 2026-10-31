@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { ArrowUpRight, BookOpen, LogOut, Mail, Sparkles, Users } from "lucide-react";
 import { Brand } from "@/components/brand";
-import { getCurrentUser, isAdminEmail } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { SESSION_COOKIE } from "@/lib/session";
 
 export default async function Dashboard() {
@@ -18,7 +18,7 @@ export default async function Dashboard() {
   }
 
   const name = user.name ?? "Teacher";
-  const isAdmin = isAdminEmail(user.email);
+  const isAdmin = user.isAdmin;
 
   return (
     <main className="min-h-screen bg-cream">

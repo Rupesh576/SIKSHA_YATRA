@@ -12,7 +12,7 @@ function isSameOrigin(request: NextRequest) {
 async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user) return { user: null, isAdmin: false } as const;
-  return { user, isAdmin: isAdminEmail(user.email) } as const;
+  return { user, isAdmin: user.isAdmin } as const;
 }
 
 export async function GET() {
@@ -67,11 +67,11 @@ export async function PATCH(request: NextRequest) {
   }
 
   const pool = getPool();
-  const targetResult = await pool.query(`select email from siksha_yatra.users where id = $1`, [body.id]);
+  const targetResult = await pool.query(`select email, is_admin from siksha_yatra.users where id = $1`, [body.id]);
   if (targetResult.rows.length === 0) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
-  if (isAdminEmail(targetResult.rows[0].email)) {
+  if (targetResult.rows[0].is_admin || isAdminEmail(targetResult.rows[0].email)) {
     return NextResponse.json({ error: "Admin accounts cannot be blocked from this dashboard." }, { status: 400 });
   }
 
@@ -102,11 +102,11 @@ export async function DELETE(request: NextRequest) {
   }
 
   const pool = getPool();
-  const targetResult = await pool.query(`select email from siksha_yatra.users where id = $1`, [body.id]);
+  const targetResult = await pool.query(`select email, is_admin from siksha_yatra.users where id = $1`, [body.id]);
   if (targetResult.rows.length === 0) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
-  if (isAdminEmail(targetResult.rows[0].email)) {
+  if (targetResult.rows[0].is_admin || isAdminEmail(targetResult.rows[0].email)) {
     return NextResponse.json({ error: "Admin accounts cannot be removed from this dashboard." }, { status: 400 });
   }
 

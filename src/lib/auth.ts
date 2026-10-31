@@ -14,6 +14,7 @@ export type AppUser = {
   subjects: string[];
   isBlocked: boolean;
   blockedReason: string | null;
+  isAdmin: boolean;
   createdAt: string;
   lastLoginAt: string;
 };
@@ -45,6 +46,7 @@ function mapUserRow(row: {
   subjects: string[];
   is_blocked: boolean;
   blocked_reason: string | null;
+  is_admin: boolean;
   created_at: Date;
   last_login_at: Date;
 }): AppUser {
@@ -59,6 +61,7 @@ function mapUserRow(row: {
     subjects: row.subjects,
     isBlocked: row.is_blocked,
     blockedReason: row.blocked_reason,
+    isAdmin: row.is_admin || isAdminEmail(row.email),
     createdAt: row.created_at.toISOString(),
     lastLoginAt: row.last_login_at.toISOString(),
   };
@@ -66,7 +69,7 @@ function mapUserRow(row: {
 
 export async function getUserById(id: string): Promise<AppUser | null> {
   const result = await getPool().query(
-    `select id, email, name, first_name, surname, phone_number, classes, subjects, is_blocked, blocked_reason, created_at, last_login_at
+    `select id, email, name, first_name, surname, phone_number, classes, subjects, is_blocked, blocked_reason, is_admin, created_at, last_login_at
      from siksha_yatra.users where id = $1`,
     [id],
   );

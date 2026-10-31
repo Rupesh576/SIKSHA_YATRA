@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import { Brand } from "@/components/brand";
 import { AdminUsers } from "@/components/admin-users";
-import { getCurrentUser, isAdminEmail } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/");
-  if (!isAdminEmail(user.email)) redirect("/dashboard");
+  if (!user.isAdmin) redirect("/dashboard");
 
   return (
     <main className="min-h-screen bg-cream">
